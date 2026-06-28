@@ -3,7 +3,7 @@ import json
 import firebase_admin
 from firebase_admin import credentials, firestore
 
-# ضع هنا محتويات ملف الـ JSON الذي قمت بتحميله كاملاً بين القوسين
+# ضع هنا بيانات الـ JSON الخاصة بـ Firebase كاملة
 firebase_config = {
   "type": "service_account",
   "project_id": "active-winoffice-diefcosystem",
@@ -18,7 +18,6 @@ firebase_config = {
   "universe_domain": "googleapis.com"
 }
 
-# تشغيل فايربيز لمرة واحدة فقط لمنع التكرار
 if not firebase_admin._apps:
     cred = credentials.Certificate(firebase_config)
     firebase_admin.initialize_app(cred)
@@ -27,18 +26,18 @@ db = firestore.client()
 
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
-        if self.path == '/verify':
-            content_length = int(self.headers['Content-Length'])
-            post_data = json.loads(self.rfile.read(content_length).decode('utf-8'))
-            token_sent = post_data.get('token')
-            
-            if not token_sent:
-                self.send_response(400)
-                self.end_headers()
-                self.wfile.write(b"Write-Host 'Error: Token is missing!'")
-                return
+        # استيعاب الطلب مباشرة دون اشتراط مسار /verify
+        content_length = int(self.headers['Content-Length'])
+        post_data = json.loads(self.rfile.read(content_length).decode('utf-8'))
+        token_sent = post_data.get('token')
+        
+        if not token_sent:
+            self.send_response(400)
+            self.end_headers()
+            self.wfile.write(b"Write-Host 'Error: Token is missing!'")
+            return
 
-            # البحث في فايربيز عن التوكن
+        try:
             users_ref = db.collection('users')
             query = users_ref.where('token', '==', token_sent).limit(1).stream()
             
@@ -61,11 +60,20 @@ class handler(BaseHTTPRequestHandler):
                 self.wfile.write(b"Write-Host '\x1b[31mThis code has reached its maximum usage limit (2 times)!\x1b[0m'")
                 return
             
-            # تحديث عدد المرات (+1) في فايربيز
             user_doc.reference.update({'usageCount': usage_count + 1})
             
-            # إرسال كود التفعيل المخفي
             self.send_response(200)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.end_headers()
             self.wfile.write(b"irm https://get.activated.win | iex")
+                    
+        except Exception as e:
+            self.send_response(500)
+            self.end_headers()
+            self.wfile.write(b"Write-Host 'Server internal error, try again.'")
+
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header('Content-Type', 'text/plain')
+        self.end_headers()
+        self.wfile.write(b"Server is running successfully.")
