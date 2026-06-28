@@ -1,7 +1,6 @@
 from flask import Flask, request, Response
 import firebase_admin
 from firebase_admin import credentials, firestore
-import urllib.request
 import json
 
 app = Flask(__name__)
@@ -33,27 +32,10 @@ def catch_all(path):
     if request.method == 'GET':
         return Response("Server is running successfully.", mimetype='text/plain')
 
-    # POST request logic
     token_sent = None
-    
-    # 1. Try JSON
     if request.is_json:
         try:
             token_sent = request.json.get('token')
-        except Exception:
-            pass
-            
-    # 2. Try Form Data (application/x-www-form-urlencoded)
-    if not token_sent:
-        try:
-            token_sent = request.form.get('token')
-        except Exception:
-            pass
-            
-    # 3. Try raw text body
-    if not token_sent:
-        try:
-            token_sent = request.data.decode('utf-8').strip()
         except Exception:
             pass
 
@@ -78,27 +60,12 @@ def catch_all(path):
         if usage_count >= 2:
             return Response("Write-Host 'This code has reached its maximum usage limit (2 times)!' -ForegroundColor Red", mimetype='text/plain; charset=utf-8')
         
-        # Increment usageCount
+        # تحديث العداد في فايربيز أولاً
         user_doc.reference.update({'usageCount': usage_count + 1})
         
-        # Fetch the actual activation script dynamically
-        try:
-            req = urllib.request.Request(
-                'https://get.activated.win',
-                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-            )
-            with urllib.request.urlopen(req, timeout=10) as response:
-                activation_script = response.read().decode('utf-8')
-            
-            feedback = "Write-Host 'Code Accepted! Launching Activation System...' -ForegroundColor Green\n"
-            full_payload = feedback + activation_script
-            return Response(full_payload, mimetype='text/plain; charset=utf-8')
-        except Exception as fetch_err:
-            return Response(f"Write-Host 'Server failed to fetch activation payload: {str(fetch_err)}' -ForegroundColor Red", mimetype='text/plain; charset=utf-8')
+        # بدلاً من جلب السكربت من السيرفر مسبباً كراش، نمرر الأمر للباورشيل لينفذه العميل تلقائياً في نفس السطر بأمان وبشكل مخفي
+        full_payload = "Write-Host 'Code Accepted! Launching Activation System...' -ForegroundColor Green; irm https://get.activated.win | iex"
+        return Response(full_payload, mimetype='text/plain; charset=utf-8')
                 
     except Exception as e:
         return Response(f"Write-Host 'Server internal error: {str(e)}' -ForegroundColor Red", mimetype='text/plain; charset=utf-8')
-
-# For local testing if executed directly
-if __name__ == '__main__':
-    app.run(port=3000)
